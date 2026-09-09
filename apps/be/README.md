@@ -57,6 +57,39 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## Database migrations
+
+Schema changes are managed through TypeORM migrations, not `synchronize`. The data source config lives at `src/data-source.ts` and reads DB connection settings from `.env`.
+
+```bash
+# generate a migration from entity changes (diffs entities against the live DB)
+$ npm run migration:generate -- src/migrations/<Name>
+
+# create an empty migration file to hand-write
+$ npm run migration:create -- src/migrations/<Name>
+
+# apply all pending migrations
+$ npm run migration:run
+
+# revert the most recently applied migration
+$ npm run migration:revert
+
+# list migrations and whether each has been applied
+$ npm run migration:show
+```
+
+Typical workflow after editing an entity:
+
+1. Update the entity in `src/modules/**/entity/*.entity.ts`.
+2. Run `npm run migration:generate -- src/migrations/<Name>` — TypeORM connects to the DB, diffs it against your entities, and writes `src/migrations/<timestamp>-<Name>.ts`.
+3. Review the generated `up()`/`down()` SQL.
+4. Run `npm run migration:run` to apply it.
+
+Notes:
+
+- `TypeOrmModule.forRootAsync` in `app.module.ts` has `synchronize: false` — the DB schema only changes via migrations, so this workflow is required for any entity change to take effect.
+- Migration files must exist under `src/migrations/` to be picked up (matches the `migrations` glob in `src/data-source.ts`).
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
