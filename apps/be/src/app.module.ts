@@ -2,8 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { createObserveModule } from '@nestjs/observe';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
 import { UserModules } from './modules/users/userModules.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -32,7 +30,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     }),
     UserModules,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  // controllers: [AppController],
+  // providers: [AppService],
 })
 export class AppModule {}
