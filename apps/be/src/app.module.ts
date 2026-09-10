@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 import { createObserveModule } from '@nestjs/observe';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { jwtConstants } from './modules/auth/constant/constants.js';
 import { UserModules } from './modules/users/userModules.js';
+// import { jwtConstants } from './modules/auth/constants.js';
 // import { AuthModule } from './modules/auth/auth.module.js';
 // import { AuthModule } from './modules/auth/auth.module.js';
 
@@ -30,6 +33,11 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         autoLoadEntities: true,
         synchronize: false,
       }),
+    }),
+    JwtModule.register({
+      global: true,
+      secret: jwtConstants.secret,
+      signOptions: { expiresIn: '60s' },
     }),
     UserModules,
     AuthModule,

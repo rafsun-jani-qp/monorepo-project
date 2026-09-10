@@ -22,7 +22,11 @@ export class UserService {
   }
 
   findOneByUserName(userName: string): Promise<User | null> {
-    return this.userRepository.findOneBy({ userName });
+    return this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.userName = :userName', { userName })
+      .getOne();
   }
 
   async create(data: CreateUserDto): Promise<User> {
