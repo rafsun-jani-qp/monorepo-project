@@ -19,6 +19,7 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException();
     }
+    await this.usersService.incrementLoginCount(user.id);
     const payload = { sub: user.id, username: user.userName };
     return {
       access_token: await this.jwtService.signAsync(payload),

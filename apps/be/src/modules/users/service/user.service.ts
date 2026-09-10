@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { CreateUserDto } from '../dto/create-user.dto.js';
@@ -43,5 +47,14 @@ export class UserService {
       }
       throw error;
     }
+  }
+
+  async incrementLoginCount(id: string): Promise<void> {
+    const user = await this.userRepository.findOneBy({ id });
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    user.loginCount += 1;
+    await this.userRepository.save(user);
   }
 }
