@@ -21,7 +21,6 @@ export class UserService {
   findAll(query: FindUsersQueryDto = {}): Promise<User[]> {
     const { userName, loginCount } = query;
     const qb = this.userRepository.createQueryBuilder('user');
-    console.log('qb log', qb.getSql());
 
     if (userName) {
       qb.andWhere('user.userName ILIKE :userName', {

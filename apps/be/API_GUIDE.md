@@ -1,0 +1,184 @@
+# API Guide
+
+Base URL (local dev): `http://localhost:3001` (or whatever `PORT` is set to in `.env` / `process.env.PORT`, default `3000`).
+
+Every request/response body is JSON. Send `Content-Type: application/json` on any request with a body.
+
+## Authentication — read this first
+
+Every endpoint in this API requires a JWT **except** the two marked "Public" below (`POST /auth/login`, `POST /api/users`). This is enforced globally by `AuthGuard` (`apps/be/src/modules/auth/guard/auth.guard.ts`) — there's no per-route opt-in needed for protection; a route is only public if it's explicitly decorated `@Public()`.
+
+To call a protected endpoint, add the token you got from login as a header:
+
+```
+Authorization: Bearer <access_token>
+```
+
+- Missing header, malformed header (not `Bearer <token>`), or an invalid/expired token → `401 Unauthorized`.
+- The token expires (`expiresIn` configured in `app.module.ts`, currently `1h`) — log in again to get a new one once it expires.
+
+---
+
+## `POST /auth/login`
+
+**Public.** Exchanges a username/password for a JWT.
+
+**Body:**
+
+```json
+{
+  "username": "your_userName",
+  "password": "your_password"
+}
+```
+
+Both fields are required non-empty strings.
+
+**Success — `200 OK`:**
+
+```json
+{
+  "access_token": "eyJhbGciOi..."
+}
+```
+
+**Failure — `401 Unauthorized`:** wrong username or wrong password (no distinction is given between the two, by design).
+
+**Side effect:** a successful login increments that user's `loginCount` by 1.
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:3001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "myuser", "password": "mypassword123"}'
+```
+
+---
+
+## `POST /api/users`
+
+**Public.** Creates (registers) a new user.
+
+**Body (`CreateUserDto`):**
+
+| Field      | Type   | Rules                                  |
+|------------|--------|------------------------------------------|
+| `name`     | string | required, non-empty                      |
+| `email`    | string | required, must be a valid email          |
+| `userName` | string | required, non-empty, **must be unique**  |
+| `location` | string | required                                 |
+| `password` | string | required, minimum 8 characters           |
+
+Any field not in this list is rejected outright (`400 Bad Request`) — the API does not silently ignore unknown fields.
+
+**Success — `201 Created`:** the created user, without the password:
+
+```json
+{
+  "id": "df7db73d-f047-44d5-9d51-62ec043bfe0e",
+  "name": "Jane Doe",
+  "loginCount": 0,
+  "email": "jane@example.com",
+  "location": "Dhaka",
+  "userName": "janedoe",
+  "createdAt": "2026-09-10T02:07:28.920Z"
+}
+```
+
+**Failure:**
+- `400 Bad Request` — validation errors (missing/invalid field), e.g. `{"message": ["email must be an email"], "error": "Bad Request", "statusCode": 400}`
+- `409 Conflict` — `userName` is already taken.
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:3001/api/users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "userName": "janedoe",
+    "location": "Dhaka",
+    "password": "password123"
+  }'
+```
+
+---
+
+## `GET /api/users`
+
+**Requires auth.** Lists users, with optional search/filter via query params. No params returns every user.
+
+| Query param  | Type   | Behavior                                                                 |
+|--------------|--------|---------------------------------------------------------------------------|
+| `userName`   | string | **Search** — matches if `userName` *contains* this text, case-insensitive |
+| `loginCount` | number | **Filter** — matches users whose `loginCount` is *exactly* this value     |
+
+Both are optional and combinable — passing both ANDs the conditions together (must match both).
+
+Passing an unknown query param, or a non-numeric `loginCount`, returns `400 Bad Request`.
+
+**Examples:**
+
+```bash
+# All users
+curl http://localhost:3001/api/users \
+  -H "Authorization: Bearer <token>"
+
+# Search: userName contains "jane" (matches "Jane", "janedoe", "JANEsmith", ...)
+curl "http://localhost:3001/api/users?userName=jane" \
+  -H "Authorization: Bearer <token>"
+
+# Filter: users who have logged in exactly 3 times
+curl "http://localhost:3001/api/users?loginCount=3" \
+  -H "Authorization: Bearer <token>"
+
+# Both together
+curl "http://localhost:3001/api/users?userName=jane&loginCount=3" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Success — `200 OK`:** an array of users (password never included), e.g.:
+
+```json
+[
+  {
+    "id": "df7db73d-f047-44d5-9d51-62ec043bfe0e",
+    "name": "Jane Doe",
+    "loginCount": 3,
+    "email": "jane@example.com",
+    "location": "Dhaka",
+    "userName": "janedoe",
+    "createdAt": "2026-09-10T02:07:28.920Z"
+  }
+]
+```
+
+An empty array `[]` (not an error) if nothing matches.
+
+---
+
+## `GET /api/users/:id`
+
+**Requires auth.** Fetches a single user by their `id` (UUID).
+
+**Example:**
+
+```bash
+curl http://localhost:3001/api/users/df7db73d-f047-44d5-9d51-62ec043bfe0e \
+  -H "Authorization: Bearer <token>"
+```
+
+**Success — `200 OK`:** the user object, or `null` if no user has that id (the endpoint doesn't 404 on a missing id — a `null` body is returned).
+
+---
+
+## Common error shapes
+
+| Status | When | Example body |
+|--------|------|---------------|
+| `400`  | Validation failed, or an unknown/extra field was sent | `{"message": ["loginCount must be an integer number"], "error": "Bad Request", "statusCode": 400}` |
+| `401`  | No token, bad token format, expired/invalid token, or wrong login credentials | `{"message": "Unauthorized", "statusCode": 401}` |
+| `409`  | Duplicate `userName` on registration | `{"message": "userName is already taken", "statusCode": 409}` |
+| `500`  | Unexpected server error | `{"statusCode": 500, "message": "Internal server error"}` |
