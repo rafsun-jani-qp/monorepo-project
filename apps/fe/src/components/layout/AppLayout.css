@@ -1,0 +1,38 @@
+.app-layout {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-layout__body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.app-layout__content {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 32px;
+}
+
+@media (max-width: 720px) {
+  .app-layout__body {
+    flex-direction: column;
+  }
+
+  .side-nav {
+    width: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .side-nav__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .app-layout__content {
+    padding: 20px;
+  }
+}
