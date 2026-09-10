@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { createObserveModule } from '@nestjs/observe';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from './modules/auth/auth.module.js';
 import { UserModules } from './modules/users/userModules.js';
+// import { AuthModule } from './modules/auth/auth.module.js';
+// import { AuthModule } from './modules/auth/auth.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -29,6 +32,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       }),
     }),
     UserModules,
+    AuthModule,
   ],
   // controllers: [AppController],
   // providers: [AppService],
