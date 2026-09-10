@@ -112,7 +112,7 @@ itself — a third command applies it:
 
 1. **`npm run migration:generate`** — connects to the **live DB**, diffs it against your
    entities, and auto-writes a migration file with the SQL it detects. Entity first, then this
-   writes the migration for you.
+   writes the migration for you. Example: `npm run migration:generate -- src/migrations/AddUserNameAndPasswordToUsers`.
 2. **`npm run migration:create`** — writes a blank empty migration file (no DB connection, no
    diffing). You fill in the SQL yourself.
 3. **`npm run migration:run`** — the only command that actually changes the DB. It applies

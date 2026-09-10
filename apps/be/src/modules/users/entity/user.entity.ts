@@ -18,6 +18,9 @@ export class User {
   @Column()
   name: string;
 
+  @Column({ default: 0 })
+  loginCount: number;
+
   @Column()
   email: string;
 
