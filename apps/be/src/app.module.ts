@@ -6,9 +6,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { jwtConstants } from './modules/auth/constant/constants.js';
 import { UserModules } from './modules/users/userModules.js';
-// import { jwtConstants } from './modules/auth/constants.js';
-// import { AuthModule } from './modules/auth/auth.module.js';
-// import { AuthModule } from './modules/auth/auth.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
