@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { Public } from '../../auth/decorator/decorator.custom.js';
 import { CreateUserDto } from '../dto/create-user.dto.js';
+import { FindUsersQueryDto } from '../dto/find-users-query.dto.js';
 import { UserService } from '../service/user.service.js';
 
 @Controller('api')
@@ -8,8 +9,8 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get('/users')
-  findAll() {
-    return this.userService.findAll();
+  findAll(@Query() query: FindUsersQueryDto) {
+    return this.userService.findAll(query);
   }
 
   @Get('/users/:id')

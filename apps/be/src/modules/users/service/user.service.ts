@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { CreateUserDto } from '../dto/create-user.dto.js';
+import { FindUsersQueryDto } from '../dto/find-users-query.dto.js';
 import { User } from '../entity/user.entity.js';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
@@ -17,8 +18,22 @@ export class UserService {
     private userRepository: Repository<User>,
   ) {}
 
-  findAll(): Promise<User[]> {
-    return this.userRepository.find();
+  findAll(query: FindUsersQueryDto = {}): Promise<User[]> {
+    const { userName, loginCount } = query;
+    const qb = this.userRepository.createQueryBuilder('user');
+    console.log('qb log', qb.getSql());
+
+    if (userName) {
+      qb.andWhere('user.userName ILIKE :userName', {
+        userName: `%${userName}%`,
+      });
+    }
+
+    if (loginCount !== undefined) {
+      qb.andWhere('user.loginCount = :loginCount', { loginCount });
+    }
+
+    return qb.getMany();
   }
 
   findOne(id: string): Promise<User | null> {
