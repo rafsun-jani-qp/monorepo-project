@@ -1,21 +1,19 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
 import { AuthGuard } from '../../auth/guard/auth.guard.js';
-import { ApiKey } from '../entity/api-key.entity.js';
 import { ApiKeyService } from '../service/api-key.service.js';
 
 @Controller('api-key')
 export class ApiKeyController {
-  constructor(
-    private readonly apiKeyService: ApiKeyService,
-    @InjectRepository(ApiKey) private apikeyRepository: Repository<ApiKey>,
-  ) {}
+  constructor(private readonly apiKeyService: ApiKeyService) {}
 
   @UseGuards(AuthGuard)
   @Post()
-  async createApiKey(@Body() userId: string, label?: string) {
-    return this.apiKeyService.generateApiKey(userId, label);
+  async createApiKey(
+    @Req() req: Request & { user: { sub: string } },
+    @Body('label') label?: string,
+  ) {
+    return this.apiKeyService.generateApiKey(req.user.sub, label);
   }
 
   //   @UseGuards(AuthGuard)

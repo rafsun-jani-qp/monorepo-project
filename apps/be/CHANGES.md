@@ -223,3 +223,134 @@ Verified after the fix: bare `/api/users`, `?userName=...`, `?loginCount=...`, b
 - **No pagination or sorting** — `/api/users` still returns every matching row in one response. Fine at current data volume, but the first thing to add once the table grows.
 - **`loginCount` is exact-match only** — no `gte`/`lte` range filtering.
 - **Leading-wildcard `ILIKE`** (`%value%`) can't use a plain B-tree index on `userName`, so this will do a sequential scan on a large table. Not a concern yet; if it becomes one, Postgres `pg_trgm` + a GIN index (or a real search engine) is the usual next step.
+
+# API key generation + API-key-only user lookup
+
+You had already written the API key feature (entity, service, controller, guard, an empty
+migration stub) in a prior commit; it didn't run. This section covers making it actually work,
+then locking `GET /api/users/:id` down to API keys only.
+
+---
+
+### `src/modules/apiKey/entity/api-key.entity.ts`
+
+**Changed:** Added the missing `@Entity('api_keys')` decorator.
+
+**Why:** Without it, TypeORM doesn't treat the class as a mapped table at all — `autoLoadEntities`
+never picks it up, `migration:generate` has nothing to diff against, and the whole feature is
+inert even though every other file (service, controller, guard) looks complete.
+
+---
+
+### `src/app.module.ts`
+
+**Changed:** Imported `ApiKeyModule` and added it to `AppModule`'s `imports` array.
+
+**Why:** `ApiKeyModule` existed but was never registered anywhere — its controller, service, and
+guard were dead code, invisible to Nest's DI container and to routing.
+
+---
+
+### `src/migrations/*-AddApiKeyEntity.ts`
+
+**Changed:** The committed migration was an empty stub (`up`/`down` both did nothing, despite the
+migrations table already recording it as "run"). Deleted it and regenerated a real one via
+`npm run migration:generate`, which produced the actual `CREATE TABLE "api_keys" (...)` /
+`DROP TABLE "api_keys"` SQL. Ran it against the local `experiment_db` container.
+
+**Why:** An empty migration means the table never existed — every call to
+`apiKeyRepository.save(...)` would have failed at runtime with a "relation does not exist" error.
+Confirmed the table now exists and holds rows correctly after the fix (tested by generating a key
+and checking it in Postgres directly).
+
+---
+
+### `src/modules/apiKey/controller/api-key.controller.ts`
+
+**Changed:** `createApiKey(@Body() userId: string, label?: string)` →
+`createApiKey(@Req() req: Request & { user: { sub: string } }, @Body('label') label?: string)`,
+calling `this.apiKeyService.generateApiKey(req.user.sub, label)`. Removed an unused
+`@InjectRepository(ApiKey)` that was only referenced by the commented-out (not implemented)
+`revoke` endpoint.
+
+**Why — the original code was broken two ways:**
+- `label` had **no parameter decorator**, so Nest never populated it — every key was generated
+  with `label: undefined`, silently.
+- `@Body() userId: string` bound the **entire JSON body** to a variable typed (and named) as if
+  it were just the id — and worse, it let the *caller* dictate whose account the key belongs to
+  by putting any `userId` in the request body. Since this route sits behind `AuthGuard`, the
+  actual user is already known from their JWT; trusting a client-supplied `userId` instead means
+  anyone with a valid token could mint an API key for a different account.
+
+**Why `@Req() req`:** `AuthGuard` (`auth.guard.ts`) already ran before this handler and, on a
+valid token, does `request['user'] = payload` — it stashes the decoded JWT onto the raw request
+object. `@Req()` is how a controller method reaches that raw Express `Request` to read what the
+guard attached to it.
+
+**Why `req.user.sub`:** `sub` is the JWT's standard **"subject"** claim (RFC 7519) — "who this
+token is about." Look at how the token is minted in `auth.service.ts`:
+```ts
+const payload = { sub: user.id, username: user.userName };
+```
+So `req.user.sub` is simply *the id of whoever is currently logged in, as recorded in their own
+token* — that's the trustworthy `userId` to stamp the new key with, as opposed to one taken from
+the request body. The `Request & { user: { sub: string } }` type exists only because Express's
+base `Request` type has no `user` property — it's added at runtime by the guard, so without the
+intersection type, `req.user` wouldn't type-check under this project's `strict` TypeScript config.
+
+**Why `@Body('label')`:** `label` (used in `api-key.service.ts`'s `generateApiKey(userId, label)`)
+is an optional, purely cosmetic string — e.g. `"my laptop key"` — so a user can tell their keys
+apart later; it has no security role. `@Body('label')` extracts just that one field from the JSON
+body (`{"label": "..."}`), rather than `@Body()` with no argument, which would bind the whole body
+object.
+
+---
+
+### `src/modules/apiKey/guard/api-key.guard.ts`
+
+**Changed:** `const userId = await this.apiKeyService.validateApiKey(rawKey); ... request.userId = userId;`
+→ `const apiKey = await this.apiKeyService.validateApiKey(rawKey); ... request.userId = apiKey.userId;`
+
+**Why:** `validateApiKey` returns the full `ApiKey` entity (or `null`), not a bare user id string —
+the old code stored that whole entity onto `request.userId`, mislabeled as if it were just the id.
+Anything downstream reading `request.userId` expecting a UUID string would have gotten an object
+instead. Caught this while wiring the guard onto `GET /api/users/:id`.
+
+---
+
+### `src/modules/users/userModules.ts`
+
+**Changed:** Imported `ApiKeyModule` into `UserModules`'s `imports`.
+
+**Why:** `UserController` now uses `@UseGuards(ApiKeyGuard)`, and `ApiKeyGuard` depends on
+`ApiKeyService`. Nest resolves a guard's dependencies from the module that declares the
+controller it's attached to, so without importing `ApiKeyModule` here, DI would fail to construct
+`ApiKeyGuard` for `UserController`.
+
+---
+
+### `src/modules/users/controller/user.controller.ts`
+
+**Changed:** `GET /api/users/:id` went from `@UseGuards(AuthGuard)` to `@Public() @UseGuards(ApiKeyGuard)`.
+Removed the now-unused `AuthGuard` import.
+
+**Why:** You asked for this endpoint to be reachable **only** via API key, not JWT. `AuthGuard` is
+registered globally as `APP_GUARD` in `auth.module.ts`, so it already runs on *every* route unless
+that route is marked `@Public()`. Adding `@UseGuards(ApiKeyGuard)` alone would have stacked it on
+top of the global `AuthGuard` — a caller would then need **both** a valid JWT *and* a valid API
+key to pass. `@Public()` opts this one route out of the global JWT check, leaving `ApiKeyGuard`
+(which requires an `x-api-key` header) as the only gate.
+
+Verified all three cases directly: no credentials → `401`; a valid JWT with no API key → `401`;
+`x-api-key: <generated key>` → `200` with the user record.
+
+---
+
+### `API_GUIDE.md` (both `apps/be/API_GUIDE.md` and `apps/fe/API_GUIDE.md`, kept identical)
+
+**Changed:** Added a `POST /api-key` section (body, response shape, curl example). Updated
+`GET /api/users/:id` from "Requires auth" to "API key only", with an example using `x-api-key`
+instead of `Authorization: Bearer`.
+
+**Why:** The docs were stale/wrong the moment the guard changed — a reader following the old
+"Requires auth" example with a Bearer token would get a `401` with no explanation why.

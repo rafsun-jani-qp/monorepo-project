@@ -106,6 +106,41 @@ curl -X POST http://localhost:3001/api/users \
 
 ---
 
+## `POST /api-key`
+
+**Requires auth.** Generates a new API key for the authenticated user (the user is taken from the JWT, not the request body — a key always belongs to whoever's token was used).
+
+**Body:**
+
+```json
+{
+  "label": "my first key"
+}
+```
+
+`label` is optional, a free-text string to help you tell keys apart later.
+
+**Success — `201 Created`:** the raw key, returned **once** — only its bcrypt hash is stored, so save it now:
+
+```json
+{
+  "apiKey": "sk-live_6928426a03c7d4160fc41631c4674183e36152daae7b7589f8d399f99a594307"
+}
+```
+
+**Failure — `401 Unauthorized`:** missing/invalid/expired bearer token (same rules as every other protected endpoint).
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:3001/api-key \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"label": "my first key"}'
+```
+
+---
+
 ## `GET /api/users`
 
 **Requires auth.** Lists users, with optional search/filter via query params. No params returns every user.
@@ -161,13 +196,15 @@ An empty array `[]` (not an error) if nothing matches.
 
 ## `GET /api/users/:id`
 
-**Requires auth.** Fetches a single user by their `id` (UUID).
+**API key only** — fetches a single user by their `id` (UUID). This route does **not** accept a JWT; it's excluded from the global `AuthGuard` and protected instead by `ApiKeyGuard`, which requires an `x-api-key` header (get one from `POST /api-key`).
+
+**Failure — `401 Unauthorized`:** missing/invalid/revoked API key. A `Bearer` token alone is not accepted here.
 
 **Example:**
 
 ```bash
 curl http://localhost:3001/api/users/df7db73d-f047-44d5-9d51-62ec043bfe0e \
-  -H "Authorization: Bearer <token>"
+  -H "x-api-key: sk-live_..."
 ```
 
 **Success — `200 OK`:** the user object, or `null` if no user has that id (the endpoint doesn't 404 on a missing id — a `null` body is returned).

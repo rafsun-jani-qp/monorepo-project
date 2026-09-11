@@ -5,6 +5,7 @@ import { createObserveModule } from '@nestjs/observe';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { jwtConstants } from './modules/auth/constant/constants.js';
+import { ApiKeyModule } from './modules/apiKey/api-key.module.js';
 import { UserModules } from './modules/users/userModules.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -38,6 +39,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     }),
     UserModules,
     AuthModule,
+    ApiKeyModule,
   ],
   // controllers: [AppController],
   // providers: [AppService],
